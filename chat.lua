@@ -1,0 +1,3 @@
+local ui=require("ui");local hw=require("hw");local M={};local log={}
+function M.run(m) local c=hw.chat();while true do ui.clear(m);ui.header(m,"CHAT BOX");local w,h=m.getSize();if not c then m.setCursorPos(2,3);m.write("Chat Box not detected.") else m.setCursorPos(2,3);m.write("Chat Box online.");m.setCursorPos(2,5);m.write("Send message from computer keyboard:");term.write("> ");local msg=read();if msg~="" then local ok=pcall(c.sendMessage,msg);log[#log+1]=(ok and "SENT: " or "FAILED: ")..msg end;local y=7;for i=math.max(1,#log-5),#log do m.setCursorPos(2,y);m.write(log[i]:sub(1,w-2));y=y+1 end end;ui.back(m);local _,x,y=os.pullEvent("monitor_touch");if y==h and x<=10 then return end end end
+return M

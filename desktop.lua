@@ -1,0 +1,7 @@
+local ui=require("ui");local t=require("theme")
+local apps={{"MUSIC","music"},{"WEB","browser"},{"CHAT","chat"},{"ENV","environment"},{"INV","inventory"},{"REDSTONE","redstone"},{"SETTINGS","settings"},{"SYSTEM","system"},{"DIAG","diagnostics"}}
+local M={}
+local function layout(m) local w,h=m.getSize();local cols=w>=48 and 3 or 2;local bw=math.max(8,math.floor((w-2-(cols-1)*2)/cols));return cols,bw end
+local function draw(m) ui.clear(m);local w,h=m.getSize();ui.header(m,"ZEVELIAN OS  •  HORIZON FINAL");m.setCursorPos(2,3);m.setTextColor(t.accent);m.write("APPLICATION CENTER");local cols,bw=layout(m);for i,a in ipairs(apps) do local c=(i-1)%cols;local r=math.floor((i-1)/cols);local x=2+c*(bw+2);local y=5+r*4;if y<h then ui.btn(m,x,y,bw,a[1],false);if y+1<h then ui.btn(m,x,y+1,bw,"OPEN",false) end end end;m.setBackgroundColor(t.panel);m.setTextColor(t.muted);m.setCursorPos(2,h);m.write("Touch an application") end
+function M.run(m,c) while true do draw(m);local e,x,y=os.pullEvent();if e=="monitor_touch" then local cols,bw=layout(m);for i,a in ipairs(apps) do local col=(i-1)%cols;local row=math.floor((i-1)/cols);local bx=2+col*(bw+2);local by=5+row*4;if x>=bx and x<bx+bw and y>=by and y<=by+1 then local ok,err=pcall(function() require(a[2]).run(m,c) end);if not ok then ui.clear(m);ui.header(m,"APPLICATION ERROR");m.setCursorPos(2,3);m.setTextColor(t.bad);m.write(tostring(err):sub(1,math.max(1,m.getSize()-3)));sleep(2) end;break end end end end end
+return M

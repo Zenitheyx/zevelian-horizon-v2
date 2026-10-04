@@ -1,0 +1,3 @@
+local ui=require("ui");local meta=require("meta");local M={}
+function M.run(m) while true do ui.clear(m);ui.header(m,"SYSTEM INFORMATION");local w,h=m.getSize();local a={"OS: "..meta.name,"Codename: "..meta.codename,"Version: "..meta.version,"Build: "..meta.build,"Computer ID: "..os.getComputerID(),"Label: "..tostring(os.getComputerLabel() or "none"),"Monitor: "..w.."x"..h,"Scale: "..tostring(m.getTextScale()),"Free space: "..fs.getFreeSpace(".")};for i,s in ipairs(a) do if i+2<h then m.setCursorPos(2,i+2);m.write(s:sub(1,w-2)) end end;ui.back(m);local _,x,y=os.pullEvent("monitor_touch");if y==h and x<=10 then return end end end
+return M

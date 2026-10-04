@@ -1,0 +1,3 @@
+local ui=require("ui");local hw=require("hw");local M={}
+function M.run(m) while true do ui.clear(m);ui.header(m,"INVENTORY MANAGER");local inv=hw.inventory();local w,h=m.getSize();if not inv then m.setCursorPos(2,3);m.write("Inventory Manager not detected.") else local ok,items=pcall(inv.list);if ok and type(items)=="table" then m.setCursorPos(2,3);m.write("Items reported: "..#items);local y=5;for slot,item in pairs(items) do if y>=h-1 then break end;m.setCursorPos(2,y);m.write((tostring(slot)..": "..tostring(item.name or item.id).." x"..tostring(item.count or "?")):sub(1,w-2));y=y+1 end else m.setCursorPos(2,3);m.write("Inventory list unavailable.") end end;ui.back(m);local _,x,y=os.pullEvent("monitor_touch");if y==h and x<=10 then return end end end
+return M
