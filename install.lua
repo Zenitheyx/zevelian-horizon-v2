@@ -1,92 +1,171 @@
-local USER = ...
-if not USER or USER == "" then
-  print("Usage: install <github-user> [repo] [branch]")
+-- ZEVELIAN OS v2.1.1 Horizon installer
+-- Works with the flattened GitHub repository layout used by zevelian-horizon.
+local user = ...
+if not user or user == "" then
+  print("Usage: install <github-username> [repo] [branch]")
+  print("Example: install Zenitheyx zevelian-horizon main")
   return
 end
 
-local REPO = select(2, ...) or "zevelian-horizon"
-local BRANCH = select(3, ...) or "main"
-local BASE = "https://raw.githubusercontent.com/" .. USER .. "/" .. REPO .. "/" .. BRANCH .. "/"
+local repo = select(2, ...) or "zevelian-horizon"
+local branch = select(3, ...) or "main"
+local base = ("https://raw.githubusercontent.com/%s/%s/%s/"):format(user, repo, branch)
 
+-- GitHub filename -> CC:Tweaked destination.
 local manifest = {
-  "README.md",
-  "auth.lua",
-  "boot.lua",
-  "browser.lua",
-  "chat.lua",
-  "config.lua",
-  "desktop.lua",
-  "diagnostics.lua",
-  "environment.lua",
-  "hw.lua",
-  "inventory.lua",
-  "meta.lua",
-  "music.lua",
-  "redstone.lua",
-  "settings.lua",
-  "startup.lua",
-  "system.lua",
-  "theme.lua",
-  "ui.lua",
-  "zevelian.lua"
+  {"startup.lua", "startup.lua"},
+  {"zevelian.lua", "zevelian.lua"},
+
+  {"auth.lua", "lib/auth.lua"},
+  {"config.lua", "lib/config.lua"},
+  {"hw.lua", "lib/hw.lua"},
+  {"meta.lua", "lib/meta.lua"},
+  {"theme.lua", "lib/theme.lua"},
+  {"ui.lua", "lib/ui.lua"},
+
+  {"boot.lua", "core/boot.lua"},
+  {"desktop.lua", "core/desktop.lua"},
+
+  {"chat.lua", "apps/chat.lua"},
+  {"environment.lua", "apps/environment.lua"},
+  {"inventory.lua", "apps/inventory.lua"},
+  {"redstone.lua", "apps/redstone.lua"},
+  {"settings.lua", "apps/settings.lua"},
+  {"system.lua", "apps/system.lua"},
+  {"music.lua", "apps/music.lua"},
+  {"browser.lua", "apps/browser.lua"},
+  {"diagnostics.lua", "apps/diagnostics.lua"},
 }
 
-local stage = ".zevelian_stage"
-
-if fs.exists(stage) then
-  fs.delete(stage)
-end
-
-fs.makeDir(stage)
-
-local function download(name)
-  print("Downloading " .. name)
-
-  local h = http.get(BASE .. name)
-
+local function fetch(path)
+  local url = base .. path
+  local h, err = http.get(url)
   if not h then
-    error("Could not download " .. name)
+    return nil, err or "HTTP request failed"
   end
-
-  local data = h.readAll()
+  local body = h.readAll()
   h.close()
-
-  if not data or #data == 0 then
-    error("Empty file: " .. name)
-  end
-
-  local f = fs.open(fs.combine(stage, name), "w")
-  f.write(data)
-  f.close()
+  return body
 end
 
-local ok, err = pcall(function()
-  for _, name in ipairs(manifest) do
-    download(name)
+local function ensureParent(path)
+  local dir = fs.getDir(path)
+  if dir and dir ~= "" then
+    fs.makeDir(dir)
+  end
+end
+
+print("")
+print("================================")
+print("  ZEVELIAN OS // HORIZON 2.1.1")
+print("================================")
+print("Repository: " .. user .. "/" .. repo .. " [" .. branch .. "]")
+print("")
+print("Checking files before changing anything...")
+
+local staged = {}
+
+for _, pair in ipairs(manifest) do
+  local source, destination = pair[1], pair[2]
+  local body, err = fetch(source)
+
+  if not body then
+    print("")
+    print("FAILED TO DOWNLOAD: " .. source)
+    print(tostring(err))
+    print("")
+    print("Nothing was changed.")
+    return
+  end
+
+  -- Compile-check every Lua program before installation.
+  local chunk, compileErr = load(body, "=" .. source)
+  if not chunk then
+    print("")
+    print("FAILED LUA CHECK: " .. source)
+    print(tostring(compileErr))
+    print("")
+    print("Nothing was changed.")
+    return
+  end
+
+  staged[destination] = body
+  print("  OK  " .. source .. " -> " .. destination)
+end
+
+local backup = "zevelian_horizon_backup"
+if fs.exists(backup) then
+  fs.delete(backup)
+end
+fs.makeDir(backup)
+
+print("")
+print("Creating rollback backup...")
+
+for _, pair in ipairs(manifest) do
+  local destination = pair[2]
+  if fs.exists(destination) then
+    local backupPath = fs.combine(backup, destination)
+    ensureParent(backupPath)
+    fs.copy(destination, backupPath)
+  end
+end
+
+local changed = {}
+
+local ok, problem = pcall(function()
+  for destination, body in pairs(staged) do
+    ensureParent(destination)
+
+    local h = fs.open(destination, "w")
+    if not h then
+      error("Cannot write " .. destination)
+    end
+
+    h.write(body)
+    h.close()
+    table.insert(changed, destination)
   end
 end)
 
 if not ok then
-  printError("INSTALL FAILED")
-  printError(tostring(err))
-  fs.delete(stage)
+  print("")
+  print("INSTALL FAILED: " .. tostring(problem))
+  print("Rolling back...")
+
+  for _, destination in ipairs(changed) do
+    if fs.exists(destination) then
+      fs.delete(destination)
+    end
+  end
+
+  for _, pair in ipairs(manifest) do
+    local destination = pair[2]
+    local backupPath = fs.combine(backup, destination)
+
+    if fs.exists(backupPath) then
+      ensureParent(destination)
+      fs.copy(backupPath, destination)
+    end
+  end
+
+  fs.delete(backup)
+
+  print("Rollback completed.")
+  print("Your previous installation was preserved.")
   return
 end
 
-for _, name in ipairs(manifest) do
-  if fs.exists(name) then
-    fs.delete(name)
-  end
-
-  fs.move(fs.combine(stage, name), name)
-end
-
-fs.delete(stage)
+fs.delete(backup)
 
 print("")
 print("================================")
-print(" ZEVELIAN OS HORIZON INSTALLED")
-print(" Version 2.2.0")
+print("  INSTALLATION COMPLETE")
 print("================================")
 print("")
-print("Type reboot to start ZEVELIAN OS.")
+print(#manifest .. " files installed.")
+print("Repository layout was converted automatically.")
+print("")
+print("Reboot to start ZEVELIAN OS.")
+print("Default login: admin / zevelian")
+print("")
